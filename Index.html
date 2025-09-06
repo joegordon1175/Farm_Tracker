@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Cattle Paddock Tracker</title>
+<style>
+  :root{
+    --bg:#0e1116;--panel:#161b24;--muted:#8a93a5;--text:#e8eef7;--line:#232b3a;
+    --accent:#4ea1ff;--accent2:#36d28e;--danger:#ff6b6b;--warn:#ffb020;--ring:rgba(78,161,255,.4);
+    --shadow:0 10px 24px rgba(0,0,0,.35), 0 2px 8px rgba(0,0,0,.25);--radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,"Helvetica Neue",Arial,sans-serif;
+    background:linear-gradient(180deg,#0b0f16,#111827 60%, #0d1420);
+    color:var(--text);
+  }
+
+  /* Top bar */
+  .topbar{
+    position:sticky;top:0;z-index:50;display:flex;align-items:center;gap:.75rem;
+    padding:.8rem 1rem;background:#0b111acc;backdrop-filter:saturate(140%) blur(10px);
+    border-bottom:1px solid #1c2433;
+  }
+  .brand{font-weight:800;letter-spacing:.2px}
+  .spacer{flex:1}
+
+  /* Menu button & dropdown */
+  .menu{position:relative}
+  .btn{
+    appearance:none;border:0;outline:none;cursor:pointer;
+    padding:.6rem .9rem;border-radius:12px;background:#1a2130;color:var(--text);
+    box-shadow:inset 0 0 0 1px #2a3347;transition:transform .05s ease, box-shadow .2s ease;
+  }
+  .btn:active{transform:translateY(1px)}
+  .btn.primary{background:linear-gradient(180deg,#3e80ff,#2f6df7)}
+  .btn.accent{background:linear-gradient(180deg,#3cda92,#25c681)}
+  .btn.warn{background:linear-gradient(180deg,#ffbf60,#ff9f2e)}
+  .btn.danger{background:linear-gradient(180deg,#ff7b7b,#ff6060)}
+  .dropdown{
+    position:absolute;right:0;top:calc(100% + 8px);min-width:230px;padding:.35rem;
+    background:#111827;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);display:none;
+  }
+  .menu.open .dropdown{display:block}
+  .menu-item{display:flex;gap:.6rem;align-items:center;padding:.65rem .75rem;border-radius:10px;color:inherit;text-decoration:none}
+  .menu-item:hover{background:#1a2233}
+  .menu-item small{color:var(--muted);margin-left:auto}
+
+  /* Layout */
+  .container{max-width:1100px;margin:0 auto;padding:1rem}
+  .grid{display:grid;grid-template-columns:1fr;gap:1rem}
+  @media(min-width:860px){.grid{grid-template-columns:1.1fr .9fr}}
+
+  /* Cards */
+  .card{
+    background:
+      radial-gradient(900px 300px at 130% -15%, rgba(76,195,138,.08), transparent 50%),
+      radial-gradient(1100px 450px at -15% -20%, rgba(78,161,255,.08), transparent 50%),
+      var(--panel);
+    border:1px solid var(--line);border-radius:var(--radius);padding:1rem;box-shadow:var(--shadow)
+  }
+  .card h2,.card h3{margin:.2rem 0 1rem;color:#dfe8ff;font-size:1.05rem}
+  .muted{color:var(--muted)}
+  .row{display:flex;flex-wrap:wrap;gap:.6rem}
+  .row > *{flex:1}
+
+  /* KPI */
+  .kpi{display:flex;gap:.8rem;align-items:baseline;flex-wrap:wrap}
+  .big{font-size:1.7rem;font-weight:900}
+  .chip{display:inline-flex;align-items:center;gap:.45rem;padding:.35rem .55rem;border-radius:999px;font-size:.85rem;border:1px solid #2b3650;background:#0f1525}
+  .chip.accent{border-color:#2f7bff}
+  .chip.ok{border-color:#1f8a59;background:#0d1b15}
+  .chip.warn{border-color:#7a5d2e;background:#1b1710}
+  .chip.bad{border-color:#7a2e2e;background:#1b1010}
+
+  /* Sections */
+  .section{display:none}
+  .section.active{display:block;animation:fade .15s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  /* Table */
+  table{width:100%;border-collapse:separate;border-spacing:0 8px}
+  th,td{text-align:left;padding:.55rem .7rem}
+  thead th{color:#cdd6ea;font-size:.9rem}
+  tbody tr{background:#121a2b;border:1px solid #1f2740}
+  tbody tr td:first-child{border-top-left-radius:10px;border-bottom-left-radius:10px}
+  tbody tr td:last-child{border-top-right-radius:10px;border-bottom-right-radius:10px}
+
+  /* Inputs */
+  .field{display:flex;flex-direction:column;gap:.35rem;margin:.4rem 0}
+  label{font-size:.9rem;color:#d2dcf3}
+  input,select{
+    width:100%;padding:.6rem .7rem;border-radius:10px;border:1px solid #2a3347;background:#0e1421;color:var(--text)
+  }
+  input:focus,select:focus{outline:none;box-shadow:0 0 0 3px var(--ring)}
+
+  /* Drag handle */
+  .handle{cursor:grab;user-select:none}
+  tr.dragging{opacity:.6;outline:2px dashed #446bff}
+  .drop-target{box-shadow:inset 0 0 0 2px #3a63ff}
+  .hint{font-size:.85rem;color:var(--muted)}
+
+  /* Modals */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:1rem;z-index:100}
+  .modal{width:min(680px,100%);background:#0f1522;border:1px solid #22304d;border-radius:16px;box-shadow:var(--shadow);padding:1rem}
+  .modal-backdrop.show{display:flex}
+  .right{justify-content:flex-end}
+  .gap{gap:.6rem}
+
+  footer{padding:2rem 1rem;text-align:center;color:#7f8aa3;font-size:.82rem}
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">🐄 Cattle Paddock Tracker</div>
+    <div class="spacer"></div>
+    <div class="menu" id="menu">
+      <button class="btn" id="menuBtn" aria-haspopup="true" aria-expanded="false">Main Menu ▾</button>
+      <nav class="dropdown" role="menu" aria-label="Main menu">
+        <a class="menu-item" href="#" data-nav="home">Home <small>dashboard</small></a>
+        <a class="menu-item" href="#" data-nav="paddocks">Paddocks <small>manage & order</small></a>
+        <a class="menu-item" href="#" data-nav="history">History <small>past moves</small></a>
+        <a class="menu-item" href="#" data-nav="reminders">Reminders <small>alerts</small></a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- HOME -->
+    <section id="home" class="section active">
+      <div class="grid">
+        <div class="card">
+          <h2>Current Paddock</h2>
+          <div id="curBox" class="kpi">
+            <div class="big">—</div>
+            <div>
+              <div class="muted">Moved in</div>
+              <div id="curMovedIn">—</div>
+            </div>
+            <div class="chip" id="daysLeftChip">Days left: —</div>
+          </div>
+          <div class="row" style="margin-top:.8rem">
+            <button class="btn primary" id="recordBtn">Record Move</button>
+            <button class="btn" id="setCurrentBtn">Set/Change Current</button>
+          </div>
+          <p class="hint">If actual move differs from the schedule, future moves are recalculated automatically.</p>
+        </div>
+
+        <div class="card">
+          <h2>Next Paddock</h2>
+          <div id="nextBox" class="kpi">
+            <div class="big">—</div>
+            <div>
+              <div class="muted">Move on</div>
+              <div id="nextWhen">—</div>
+            </div>
+            <div class="chip accent" id="nextDur">Duration: —</div>
+          </div>
+          <div class="chip warn" id="dueSoon" style="display:none">Due soon</div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:1rem">
+        <h3>Upcoming Schedule (next 6 moves)</h3>
+        <div id="upcoming">—</div>
+      </div>
+    </section>
+
+    <!-- PADDOCKS -->
+    <section id="paddocks" class="section">
+      <div class="card">
+        <h2>Paddocks</h2>
+        <div class="row">
+          <div class="field"><label>Paddock Number</label><input id="padNum" type="text" placeholder="e.g., 1"></div>
+          <div class="field"><label>Paddock Name</label><input id="padName" type="text" placeholder="e.g., Home Flat"></div>
+          <div class="field"><label>Duration (days)</label><input id="padDur" type="number" min="1" value="3"></div>
+        </div>
+        <div class="row right gap">
+          <button class="btn" id="clearForm">Clear</button>
+          <button class="btn accent" id="savePad">Add / Update</button>
+        </div>
+        <p class="hint">Drag the ◳ handle to reorder. This order controls the rotation.</p>
+        <div style="overflow:auto">
+          <table>
+            <thead>
+              <tr>
+                <th style="width:60px">Order</th>
+                <th>#</th>
+                <th>Name</th>
+                <th>Days</th>
+                <th style="width:180px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="padBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section id="history" class="section">
+      <div class="card">
+        <h2>Past Movements</h2>
+        <div style="overflow:auto">
+          <table>
+            <thead>
+              <tr>
+                <th>Actual Date</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Planned Date</th>
+                <th>Note</th>
+              </tr>
+            </thead>
+            <tbody id="histBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- REMINDERS -->
+    <section id="reminders" class="section">
+      <div class="card">
+        <h2>Reminder Settings</h2>
+        <div class="row">
+          <div class="field" style="max-width:260px">
+            <label>Remind me before</label>
+            <div class="row">
+              <input id="leadValue" type="number" min="0" value="6">
+              <select id="leadUnit">
+                <option value="hours">hours</option>
+                <option value="days">days</option>
+              </select>
+            </div>
+            <div class="hint">We’ll try browser notifications; if blocked, you’ll see an in-app alert.</div>
+          </div>
+        </div>
+        <div class="row gap">
+          <button class="btn" id="testNotif">Test Notification</button>
+          <button class="btn accent" id="saveNotif">Save Settings</button>
+        </div>
+        <p class="hint" id="notifStatus">Notifications: not requested yet.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>Data is saved locally in your browser. Tip: add this page to your phone’s Home Screen.</footer>
+
+  <!-- Modals -->
+  <div class="modal-backdrop" id="setCurrentModal">
+    <div class="modal">
+      <h3>Set / Change Current Paddock</h3>
+      <div class="field">
+        <label>Current paddock</label>
+        <select id="currentSelect"></select>
+      </div>
+      <div class="field">
+        <label>Date moved in</label>
+        <input id="currentDate" type="date">
+      </div>
+      <div class="row right gap">
+        <button class="btn" data-close="setCurrentModal">Cancel</button>
+        <button class="btn accent" id="confirmSetCurrent">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="recordModal">
+    <div class="modal">
+      <h3>Record Actual Move</h3>
+      <div class="field">
+        <label>Moved to paddock</label>
+        <select id="moveToSelect"></select>
+      </div>
+      <div class="field">
+        <label>Actual move date</label>
+        <input id="moveDate" type="date">
+      </div>
+      <div class="field">
+        <label>Notes (optional)</label>
+        <input id="moveNote" type="text" placeholder="e.g., skipped paddock due to wet">
+      </div>
+      <div class="row right gap">
+        <button class="btn" data-close="recordModal">Cancel</button>
+        <button class="btn primary" id="confirmRecord">Record Move</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+/* ========== Helpers ========== */
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const pad = n => String(n).padStart(2,'0');
+const todayStr = () => { const d=new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; };
+const toDate = v => (v instanceof Date? v : new Date(v));
+const addDays = (d, n) => { const x=new Date(d); x.setDate(x.getDate()+Number(n||0)); return x; };
+const fmtWeekday = d => d.toLocaleDateString(undefined,{weekday:'long'});
+const fmtShort = d => d.toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+// date-only string to avoid UTC shift in local render
+const dateOnlyStr = d => { const x = new Date(d); return `${x.getFullYear()}-${pad(x.getMonth()+1)}-${pad(x.getDate())}`; };
+
+/* ========== Storage & State ========== */
+const LS_KEY='pdk-rotation-app-v1';
+function load(){
+  try{
+    const raw=localStorage.getItem(LS_KEY);
+    if(!raw) return {
+      paddocks:[
+        {id:crypto.randomUUID(),number:'1',name:'Home Flat',duration:3,order:0},
+        {id:crypto.randomUUID(),number:'2',name:'Willow Bend',duration:4,order:1},
+        {id:crypto.randomUUID(),number:'3',name:'North Rise',duration:2,order:2},
+      ],
+      current:{paddockId:null,dateIn:null},
+      history:[],
+      reminders:{leadMs:6*60*60*1000},
+      lastNotifiedFor:null
+    };
+    const s = JSON.parse(raw);
+    // defensive defaults
+    s.paddocks ||= []; s.current ||= {paddockId:null,dateIn:null}; s.history ||= [];
+    s.reminders ||= {leadMs:6*60*60*1000};
+    return s;
+  }catch{
+    return {paddocks:[],current:{paddockId:null,dateIn:null},history:[],reminders:{leadMs:0},lastNotifiedFor:null};
+  }
+}
+function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state)); }catch(e){ console.error('Save failed',e); } }
+let state = load();
+
+/* ========== Menu ========== */
+const menu = $('#menu'); const menuBtn = $('#menuBtn');
+menuBtn.addEventListener('click',()=>{
+  menu.classList.toggle('open');
+  menuBtn.setAttribute('aria-expanded', menu.classList.contains('open'));
+});
+document.addEventListener('click',(e)=>{ if(!menu.contains(e.target)){ menu.classList.remove('open'); menuBtn.setAttribute('aria-expanded','false'); }});
+$$('.menu-item').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();switchSection(a.dataset.nav);menu.classList.remove('open');}));
+
+function switchSection(id){ $$('.section').forEach(s=>s.classList.remove('active')); $('#'+id).classList.add('active'); }
+
+/* ========== Paddocks CRUD + Drag/Drop ========== */
+const padBody = $('#padBody');
+function renderPaddocks(){
+  padBody.innerHTML='';
+  const list=[...state.paddocks].sort((a,b)=>a.order-b.order);
+  list.forEach((p,i)=>{
+    const tr=document.createElement('tr');
+    tr.setAttribute('draggable','true');
+    tr.dataset.id=p.id;
+    tr.innerHTML=`
+      <td><span class="handle" title="Drag to reorder">◳</span> <span class="muted">#${i+1}</span></td>
+      <td>${p.number}</td>
+      <td>${p.name}</td>
+      <td>${p.duration}</td>
+      <td class="row">
+        <button class="btn" data-edit="${p.id}">Edit</button>
+        <button class="btn danger" data-del="${p.id}">Delete</button>
+      </td>
+    `;
+    padBody.appendChild(tr);
+  });
+
+  // Edit/Delete handlers
+  padBody.querySelectorAll('[data-edit]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const id=btn.getAttribute('data-edit');
+      const p=state.paddocks.find(x=>x.id===id); if(!p) return;
+      $('#padNum').value=p.number; $('#padName').value=p.name; $('#padDur').value=p.duration;
+      $('#savePad').dataset.editing=id;
+      switchSection('paddocks');
+    });
+  });
+  padBody.querySelectorAll('[data-del]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const id=btn.getAttribute('data-del');
+      if(!confirm('Delete this paddock?')) return;
+      if(state.current.paddockId===id){ state.current={paddockId:null,dateIn:null}; }
+      state.paddocks=state.paddocks.filter(x=>x.id!==id);
+      reindexOrders(); save(); refresh(true);
+    });
+  });
+
+  // Drag & drop (drop "on" row == place before that row)
+  let dragId=null;
+  padBody.querySelectorAll('tr').forEach(row=>{
+    row.addEventListener('dragstart',e=>{ dragId=row.dataset.id; row.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
+    row.addEventListener('dragend',()=>{ dragId=null; row.classList.remove('dragging'); $$('.drop-target').forEach(x=>x.classList.remove('drop-target')); });
+    row.addEventListener('dragover',e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; row.classList.add('drop-target'); });
+    row.addEventListener('dragleave',()=> row.classList.remove('drop-target'));
+    row.addEventListener('drop',e=>{
+      e.preventDefault();
+      row.classList.remove('drop-target');
+      if(!dragId || dragId===row.dataset.id) return;
+      const ids=[...padBody.querySelectorAll('tr')].map(r=>r.dataset.id);
+      const from=ids.indexOf(dragId), to=ids.indexOf(row.dataset.id);
+      if(from<0||to<0) return;
+      ids.splice(to,0,ids.splice(from,1)[0]); // move before target
+      ids.forEach((id,idx)=>{
+        const p=state.paddocks.find(x=>x.id===id);
+        if(p) p.order=idx;
+      });
+      save(); refresh(true);
+    });
+  });
+}
+function reindexOrders(){
+  [...state.paddocks].sort((a,b)=>a.order-b.order).forEach((p,i)=> p.order=i);
+}
+$('#savePad').addEventListener('click',()=>{
+  const number=$('#padNum').value.trim();
+  const name=$('#padName').value.trim();
+  const duration=Math.max(1, Number($('#padDur').value||1));
+  if(!number || !name) { alert('Please enter paddock number and name.'); return; }
+  const editing=$('#savePad').dataset.editing;
+  if(editing){
+    const p=state.paddocks.find(x=>x.id===editing); if(p){ p.number=number; p.name=name; p.duration=duration; }
+    $('#savePad').removeAttribute('data-editing');
+  }else{
+    state.paddocks.push({id:crypto.randomUUID(),number,name,duration,order:state.paddocks.length});
+  }
+  save(); $('#padNum').value=''; $('#padName').value=''; $('#padDur').value=3; refresh(true);
+});
+$('#clearForm').addEventListener('click',()=>{
+  $('#padNum').value=''; $('#padName').value=''; $('#padDur').value=3; $('#savePad').removeAttribute('data-editing');
+});
+
+/* ========== Rotation & Schedule ========== */
+function orderedPaddocks(){ return [...state.paddocks].sort((a,b)=>a.order-b.order); }
+function currentPaddock(){ return state.current.paddockId ? state.paddocks.find(p=>p.id===state.current.paddockId) : null; }
+function nextPaddockFrom(id){
+  const list=orderedPaddocks(); if(!list.length) return null;
+  const i=list.findIndex(p=>p.id===id); return list[(i<0?0:(i+1)%list.length)];
+}
+function plannedMoveOut(){
+  const cur=currentPaddock(); if(!cur||!state.current.dateIn) return null;
+  return addDays(state.current.dateIn, cur.duration);
+}
+function computeUpcoming(n=6){
+  const list=orderedPaddocks();
+  const cur=currentPaddock(); if(!cur||!state.current.dateIn||!list.length) return [];
+  let idx=list.findIndex(p=>p.id===cur.id);
+  let date=plannedMoveOut(); // first upcoming move-in
+  const seq=[];
+  for(let i=0;i<n;i++){
+    const to=list[(idx+1)%list.length];
+    seq.push({to, date:new Date(date), duration:to.duration});
+    idx=(idx+1)%list.length;
+    date=addDays(date, to.duration); // next move-in date
+  }
+  return seq;
+}
+
+/* ========== Home Render ========== */
+function renderHome(){
+  const cur=currentPaddock();
+  const curLabel = $('#curBox .big');
+  const movedInEl = $('#curMovedIn');
+  const daysLeftChip = $('#daysLeftChip');
+  const nextLabel = $('#nextBox .big');
+  const nextWhen = $('#nextWhen');
+  const nextDur = $('#nextDur');
+  const dueSoon = $('#dueSoon');
+  const upDiv = $('#upcoming');
+
+  if(!cur || !state.current.dateIn){
+    curLabel.textContent='Set Current';
+    movedInEl.textContent='—';
+    daysLeftChip.textContent='Days left: —'; daysLeftChip.className='chip';
+    nextLabel.textContent='—'; nextWhen.textContent='—'; nextDur.textContent='Duration: —';
+    upDiv.textContent='—'; dueSoon.style.display='none';
+    return;
+  }
+
+  curLabel.textContent = `${cur.name}`;
+  const din = toDate(state.current.dateIn);
+  movedInEl.textContent = `${fmtWeekday(din)}, ${fmtShort(din)}`;
+
+  const moveOut = plannedMoveOut();
+  if(moveOut){
+    const msPerDay = 24*60*60*1000;
+    // normalize to local noon to reduce DST/off-by-one edges
+    const nowNoon = new Date(); nowNoon.setHours(12,0,0,0);
+    const dueNoon = new Date(moveOut); dueNoon.setHours(12,0,0,0);
+    const daysLeft = Math.ceil((dueNoon - nowNoon)/msPerDay);
+
+    daysLeftChip.textContent = daysLeft>=0 ? `Days left: ${daysLeft}` : `Overdue by ${Math.abs(daysLeft)} day(s)`;
+    daysLeftChip.className = 'chip ' + (daysLeft>1?'ok':daysLeft>=0?'warn':'bad');
+
+    const nxt = nextPaddockFrom(cur.id);
+    nextLabel.textContent = nxt ? `${nxt.name}` : '—';
+    nextWhen.textContent = `${fmtWeekday(moveOut)}, ${fmtShort(moveOut)}`;
+    nextDur.textContent = `Duration: ${nxt? nxt.duration : '—'} day${nxt && nxt.duration!=1?'s':''}`;
+
+    const lead = state.reminders.leadMs || 0;
+    const soon = (dueNoon - Date.now()) <= Math.max(lead, 0);
+    dueSoon.style.display = soon ? 'inline-flex' : 'none';
+  }
+
+  // Upcoming list
+  const up = computeUpcoming(6);
+  if(!up.length){ upDiv.textContent='—'; return; }
+  const wrap = document.createElement('div'); wrap.style.display='grid'; wrap.style.gap='.45rem';
+  up.forEach((u,i)=>{
+    const row=document.createElement('div'); row.className='row'; row.style.alignItems='center';
+    row.innerHTML = `
+      <div class="chip">${i+1}</div>
+      <div style="flex:1">${u.to.name}</div>
+      <div class="chip">${fmtWeekday(u.date)}, ${fmtShort(u.date)}</div>
+      <div class="chip">+${u.duration} d</div>`;
+    wrap.appendChild(row);
+  });
+  upDiv.innerHTML=''; upDiv.appendChild(wrap);
+}
+
+/* ========== History Render ========== */
+function renderHistory(){
+  const tb=$('#histBody'); tb.innerHTML='';
+  const rows=[...state.history].sort((a,b)=> new Date(b.actualDate)-new Date(a.actualDate));
+  if(!rows.length){
+    const tr=document.createElement('tr'); tr.innerHTML=`<td colspan="5" class="muted" style="text-align:center">No moves recorded yet.</td>`; tb.appendChild(tr); return;
+  }
+  for(const h of rows){
+    const tr=document.createElement('tr');
+    tr.innerHTML=`
+      <td>${fmtWeekday(toDate(h.actualDate))}, ${fmtShort(toDate(h.actualDate))}</td>
+      <td>${h.fromLabel||'—'}</td>
+      <td>${h.toLabel||'—'}</td>
+      <td>${h.plannedDate ? `${fmtWeekday(toDate(h.plannedDate))}, ${fmtShort(toDate(h.plannedDate))}` : '—'}</td>
+      <td>${h.note||''}</td>`;
+    tb.appendChild(tr);
+  }
+}
+
+/* ========== Modals ========== */
+function openModal(id){ document.getElementById(id).classList.add('show'); }
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+// button-close
+$$('[data-close]').forEach(b=> b.addEventListener('click', ()=> closeModal(b.getAttribute('data-close'))));
+// click on backdrop to close
+$$('.modal-backdrop').forEach(bg=>{
+  bg.addEventListener('click',(e)=>{ if(e.target===bg) bg.classList.remove('show'); });
+});
+
+/* Set current modal */
+$('#setCurrentBtn').addEventListener('click', ()=>{
+  if(!state.paddocks.length){ alert('Add paddocks first.'); return; }
+  populateSelect($('#currentSelect'), state.current.paddockId);
+  $('#currentDate').value = state.current.dateIn || todayStr();
+  openModal('setCurrentModal');
+});
+$('#confirmSetCurrent').addEventListener('click',()=>{
+  const id=$('#currentSelect').value; const d=$('#currentDate').value;
+  if(!id||!d) { alert('Select paddock and date.'); return; }
+  state.current={paddockId:id, dateIn:dateOnlyStr(d)}; state.lastNotifiedFor=null; save(); closeModal('setCurrentModal'); refresh();
+});
+
+/* Record move modal */
+$('#recordBtn').addEventListener('click',()=>{
+  const cur=currentPaddock(); if(!cur){ alert('Set a current paddock first.'); return; }
+  const scheduled = nextPaddockFrom(cur.id);
+  populateSelect($('#moveToSelect'), scheduled?.id);
+  $('#moveDate').value = todayStr();
+  $('#moveNote').value = '';
+  openModal('recordModal');
+});
+$('#confirmRecord').addEventListener('click',()=>{
+  const cur=currentPaddock(); if(!cur){ alert('No current paddock set.'); return; }
+  const planned = plannedMoveOut();
+  const toId = $('#moveToSelect').value;
+  if(!toId){ alert('Choose a destination paddock.'); return; }
+  const to = state.paddocks.find(p=>p.id===toId);
+  const actualDate = $('#moveDate').value || todayStr();
+  const note = $('#moveNote').value.trim();
+
+  // history append (store dates as YYYY-MM-DD to avoid timezone drift)
+  state.history.push({
+    actualDate: dateOnlyStr(actualDate),
+    fromId:cur.id,toId,
+    fromLabel: cur.name, toLabel: to?.name||'—',
+    plannedDate: planned? dateOnlyStr(planned) : null,
+    note
+  });
+
+  // update current to actual destination/date
+  state.current = { paddockId: toId, dateIn: dateOnlyStr(actualDate) };
+  state.lastNotifiedFor = null;
+  save(); closeModal('recordModal'); refresh();
+});
+
+/* Select helper */
+function populateSelect(sel, selectedId){
+  const list=orderedPaddocks();
+  sel.innerHTML = list.map(p=>`<option value="${p.id}" ${p.id===selectedId?'selected':''}>${p.name} (#${p.number}, ${p.duration}d)</option>`).join('');
+}
+
+/* ========== Reminders ========== */
+function leadMsFromInputs(){
+  const v=Math.max(0, Number($('#leadValue').value||0));
+  const unit=$('#leadUnit').value;
+  return unit==='days' ? v*24*60*60*1000 : v*60*60*1000;
+}
+function inputsFromLeadMs(ms){
+  if(!Number.isFinite(ms)){ $('#leadUnit').value='hours'; $('#leadValue').value=6; return; }
+  if(ms%(24*60*60*1000)===0){ $('#leadUnit').value='days'; $('#leadValue').value = ms/(24*60*60*1000); }
+  else{ $('#leadUnit').value='hours'; $('#leadValue').value = Math.round(ms/(60*60*1000)); }
+}
+function ensurePermission(){
+  if(!('Notification' in window)){ $('#notifStatus').textContent='Notifications not supported. Using in-app alerts.'; return Promise.resolve('unsupported'); }
+  if(Notification.permission==='granted'){ $('#notifStatus').textContent='Notifications: allowed.'; return Promise.resolve('granted'); }
+  if(Notification.permission==='denied'){ $('#notifStatus').textContent='Notifications: blocked. Using in-app alerts.'; return Promise.resolve('denied'); }
+  return Notification.requestPermission().then(p=>{
+    $('#notifStatus').textContent = (p==='granted')?'Notifications: allowed.':'Notifications: blocked or dismissed.';
+    return p;
+  });
+}
+function notify(title, body){
+  if('Notification' in window && Notification.permission==='granted'){ try{ new Notification(title,{body}); }catch{} }
+  else{ alert(`${title}\n\n${body}`); }
+}
+function reminderTick(){
+  const cur=currentPaddock(); if(!cur || !state.current.dateIn) return;
+  const due=plannedMoveOut(); if(!due) return;
+  const lead=state.reminders.leadMs||0;
+  const notifyAt = toDate(due).getTime() - lead;
+  const key = `${cur.id}@${dateOnlyStr(due)}`;
+  if(Date.now() >= notifyAt && state.lastNotifiedFor!==key){
+    const nxt=nextPaddockFrom(cur.id);
+    notify('Cattle Move Reminder', `Move from ${cur.name} to ${nxt?.name||'next paddock'} on ${fmtWeekday(due)}, ${fmtShort(due)}.`);
+    state.lastNotifiedFor=key; save();
+  }
+}
+$('#saveNotif').addEventListener('click',()=>{ state.reminders.leadMs = leadMsFromInputs(); save(); ensurePermission(); alert('Reminder settings saved.'); });
+$('#testNotif').addEventListener('click',()=>{ ensurePermission().then(()=> notify('Test Reminder','Notifications are working!')); });
+
+/* ========== Refresh & Init ========== */
+function refresh(renderAll=false){
+  renderHome();
+  renderHistory();
+  if(renderAll) renderPaddocks();
+}
+
+function init(){
+  // If seeded and no current, set first paddock as current today
+  if(!state.current.paddockId && state.paddocks.length){
+    state.current={paddockId: orderedPaddocks()[0].id, dateIn: todayStr()};
+    save();
+  }
+  // Set reminder inputs
+  if(state.reminders && typeof state.reminders.leadMs==='number') inputsFromLeadMs(state.reminders.leadMs);
+  else { state.reminders={leadMs:6*60*60*1000}; inputsFromLeadMs(state.reminders.leadMs); save(); }
+
+  // Set initial notif status
+  if('Notification' in window){
+    $('#notifStatus').textContent = (Notification.permission==='granted')?'Notifications: allowed.'
+      : (Notification.permission==='denied')?'Notifications: blocked. Using in-app alerts.'
+      : 'Notifications: not requested yet.';
+  } else { $('#notifStatus').textContent='Notifications not supported. Using in-app alerts.'; }
+
+  renderPaddocks(); refresh();
+  // reminder timer
+  setInterval(reminderTick, 60*1000);
+  setTimeout(reminderTick, 1000);
+}
+init();
+</script>
+</body>
+</html>
