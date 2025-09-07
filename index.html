@@ -96,12 +96,6 @@
   }
   input:focus,select:focus{outline:none;box-shadow:0 0 0 3px var(--ring)}
 
-  /* Drag handle */
-  .handle{cursor:grab;user-select:none}
-  tr.dragging{opacity:.6;outline:2px dashed #446bff}
-  .drop-target{box-shadow:inset 0 0 0 2px #3a63ff}
-  .hint{font-size:.85rem;color:var(--muted)}
-
   /* Modals */
   .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;padding:1rem;z-index:100}
   .modal{width:min(680px,100%);background:#0f1522;border:1px solid #22304d;border-radius:16px;box-shadow:var(--shadow);padding:1rem}
@@ -181,7 +175,7 @@
           <button class="btn" id="clearForm">Clear</button>
           <button class="btn accent" id="savePad">Add / Update</button>
         </div>
-        <p class="hint">Drag the ◳ handle to reorder. This order controls the rotation.</p>
+        <p class="hint">Use ↑ / ↓ buttons to reorder. This order controls the rotation.</p>
         <div style="overflow:auto">
           <table>
             <thead>
@@ -341,22 +335,25 @@ $$('.menu-item').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();sw
 
 function switchSection(id){ $$('.section').forEach(s=>s.classList.remove('active')); $('#'+id).classList.add('active'); }
 
-/* ========== Paddocks CRUD + Drag/Drop ========== */
+/* ========== Paddocks CRUD + Up/Down Reordering ========== */
 const padBody = $('#padBody');
 function renderPaddocks(){
   padBody.innerHTML='';
   const list=[...state.paddocks].sort((a,b)=>a.order-b.order);
   list.forEach((p,i)=>{
     const tr=document.createElement('tr');
-    tr.setAttribute('draggable','true');
     tr.dataset.id=p.id;
+    const upBtn = i > 0 ? `<button class="btn" data-up="${p.id}">↑</button>` : '';
+    const downBtn = i < list.length - 1 ? `<button class="btn" data-down="${p.id}">↓</button>` : '';
     tr.innerHTML=`
-      <td><span class="handle" title="Drag to reorder">◳</span> <span class="muted">#${i+1}</span></td>
+      <td><span class="muted">#${i+1}</span></td>
       <td>${p.number}</td>
       <td>${p.name}</td>
       <td>${p.duration}</td>
       <td class="row">
         <button class="btn" data-edit="${p.id}">Edit</button>
+        ${upBtn}
+        ${downBtn}
         <button class="btn danger" data-del="${p.id}">Delete</button>
       </td>
     `;
@@ -383,26 +380,39 @@ function renderPaddocks(){
     });
   });
 
-  // Drag & drop (drop "on" row == place before that row)
-  let dragId=null;
-  padBody.querySelectorAll('tr').forEach(row=>{
-    row.addEventListener('dragstart',e=>{ dragId=row.dataset.id; row.classList.add('dragging'); e.dataTransfer.effectAllowed='move'; });
-    row.addEventListener('dragend',()=>{ dragId=null; row.classList.remove('dragging'); $$('.drop-target').forEach(x=>x.classList.remove('drop-target')); });
-    row.addEventListener('dragover',e=>{ e.preventDefault(); e.dataTransfer.dropEffect='move'; row.classList.add('drop-target'); });
-    row.addEventListener('dragleave',()=> row.classList.remove('drop-target'));
-    row.addEventListener('drop',e=>{
-      e.preventDefault();
-      row.classList.remove('drop-target');
-      if(!dragId || dragId===row.dataset.id) return;
-      const ids=[...padBody.querySelectorAll('tr')].map(r=>r.dataset.id);
-      const from=ids.indexOf(dragId), to=ids.indexOf(row.dataset.id);
-      if(from<0||to<0) return;
-      ids.splice(to,0,ids.splice(from,1)[0]); // move before target
-      ids.forEach((id,idx)=>{
-        const p=state.paddocks.find(x=>x.id===id);
-        if(p) p.order=idx;
-      });
-      save(); refresh(true);
+  // Up button handlers
+  padBody.querySelectorAll('[data-up]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const id=btn.dataset.up;
+      const sorted=orderedPaddocks();
+      const idx=sorted.findIndex(p=>p.id===id);
+      if(idx>0){
+        const prev=sorted[idx-1];
+        const curr=sorted[idx];
+        const temp=prev.order;
+        prev.order=curr.order;
+        curr.order=temp;
+        save();
+        refresh(true);
+      }
+    });
+  });
+
+  // Down button handlers
+  padBody.querySelectorAll('[data-down]').forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const id=btn.dataset.down;
+      const sorted=orderedPaddocks();
+      const idx=sorted.findIndex(p=>p.id===id);
+      if(idx < sorted.length - 1){
+        const next=sorted[idx+1];
+        const curr=sorted[idx];
+        const temp=next.order;
+        next.order=curr.order;
+        curr.order=temp;
+        save();
+        refresh(true);
+      }
     });
   });
 }
